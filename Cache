@@ -1,0 +1,149 @@
+var Cache = {};
+	$.extend(Cache, {
+		config: {
+			size: 3,
+			lifeTime:86400 //一天的秒数
+		},
+		support: (function() {
+			Cache.localStorage = window.localStorage;
+			var _t = !(typeof window.localStorage === 'undefined');
+			return _t;
+		})(),
+		memQueue: (function(){
+			if(Cache.support){
+				var jsonStr = window.localStorage['LRUConfig'];
+				return jsonStr ? JSON.parse(jsonStr) || {};
+			}else{
+				return {};
+			}
+		})(); || {},
+		
+		get: function(appid, url) {
+			if (true == this.support) {
+				var tag = url;
+				var key = tag + '_' + appid + '_' + url;
+				//开始做LRU算法。
+				this.LRU(key);
+				//LRU算法结束。
+				var isFresh = true;
+				var nowTime = (new Date()).getTime()/1000;
+				if(key in this.memQueue.keys){
+					var cacheTime = this.memQueue.keys[key].life/1000;
+					//如果过期时间超过 配置的lifeTime，
+					//则清除掉当前缓存
+					if(nowTime - cacheTime >= this.config.lifeTime){
+						delete this.memQueue.keys[key];
+						for(var i=0,len=this.memQueue.objs.length; i<len;i++){
+							var _o = this.memQueue.objs[i];
+							if(_o.key == key){
+								this.memQueue.objs.splice(i,1);
+								break;
+							}
+						}
+						isFresh = false;
+					}
+				}
+				//如果isFresh为假，就是已过期，则返回null，否则从localStorage中取
+				return (false == isFresh) ? null : this.localStorage[key];
+			}
+		},
+		set: function(appid, url, value) {
+			if (true == this.support) {
+				var tag = url;
+				var key = tag + '_' + appid + '_' + url;
+				var lruKey = this.getLRU();
+				//淘汰最近最少使用的这个。
+				//另外起一个方法读取最符合淘汰的这个
+				//前提是当前这个key，不在localStorage里面。
+				if (lruKey) {
+					this.localStorage.removeItem(lruKey);
+				}
+				//开始设置一下这个值
+				//为了兼容性，用以下方法设置
+				if (typeof this.memQueue.objs != 'undefined' &&
+					this.memQueue.objs.length <= this.config.size) {
+					this.localStorage.removeItem(key);
+					this.localStorage[key] = value;
+					//当前的key，也必须lru一下
+					this.LRU(key);
+					//lru结束
+				} else {
+					while (this.memQueue.length >= this.config.size) {
+						var lruKey = this.getLRU();
+						//淘汰最近最少使用的这个。
+						//另外起一个方法读取最符合淘汰的这个
+						if (lruKey) {
+							this.localStorage.removeItem(lruKey);
+						}
+					}
+				}
+			}
+		},
+		/*
+		 *	近期最少使用算法
+		 */
+		LRU: function(key) {
+			var memQueue = this.memQueue;
+			if (typeof memQueue.objs != 'undefined') {
+				var _o = memQueue.objs;
+
+				//开始计算那个要淘汰的key，
+				//就是那个times最大的，如果times最大的有几个
+				//则返回那个time最小的
+				var isIn = false;
+				for (var i = 0, len = _o.length; i < len; i++) {
+					_o[i].times = (key == _o[i].key) ? 0 : _o[i].times + 1;
+					_o[i].time = (key == _o[i].key) ? (new Date()).getTime() : _o[i].time;
+					if(key == _o[i].key && false == isIn){
+						isIn = true;
+					}
+				}
+				// 如果
+				if(false == isIn){
+					var _to = {
+						'key': key,
+						'times': 0,
+						'time': (new Date()).getTime(),
+						'life': (new Date()).getTime()
+					};
+					this.memQueue.keys[key] = _to;
+					this.memQueue.objs.push(_to);
+				}
+				_o.sort(function(f, s) {
+					//按times降序排列。
+					if (f.times < s.times) {
+						return 1;
+					} else if (f.times > s.times) {
+						return -1;
+					} else {
+						//开始比较time
+						//按time，时间升序排列
+						if (f.time < s.time) {
+							return -1;
+						} else {
+							return 1;
+						}
+					}
+				});
+			} else {
+				this.memQueue.objs = [];
+				this.memQueue.keys = {};
+				var _to = {
+					'key': key,
+					'times': 0,
+					'time': (new Date()).getTime(),
+					'life': (new Date()).getTime()
+				};
+				this.memQueue.keys[key] = _to;
+				this.memQueue.objs.push(_to);
+				return null;
+			}
+		},
+		/*
+		 *	读取需要淘汰的一项
+		 */
+		getLRU: function() {
+			var _o = this.memQueue.objs;
+			return (_o.length >= this.config.size) ? _o.shift().key : null;
+		}
+	});
