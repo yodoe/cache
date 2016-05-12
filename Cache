@@ -1,7 +1,7 @@
 var Cache = {};
 	$.extend(Cache, {
 		config: {
-			size: 3,
+			size: 4,
 			lifeTime:86400 //一天的秒数
 		},
 		support: (function() {
