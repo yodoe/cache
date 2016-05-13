@@ -4,6 +4,7 @@ ifdslf
 cache_v1
 
 function a(){
+	if();
 	console.log(1);
 }
 =====
