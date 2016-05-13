@@ -4,7 +4,7 @@ ifdslf
 cache_v1
 
 function a(){
-	iif();
+	iiif();
 	console.log(1);
 }
 =====
